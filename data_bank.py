@@ -1,42 +1,41 @@
 # -*- coding: utf-8 -*-
 
 
-import xlrd  # 读取excel的库
-import xlwt   # 写入excel的库
+import xlrd  # 操作excel的库
+import xlwt
 import difflib   # 用来对比两个字符串的差异
 import time  #时间延迟的库
 
 # 一些说明文档
 # http://www.cnblogs.com/lhj588/archive/2012/01/06/2314181.html
 
-#fromdata : 主体0,年度1,月份2,发票号码3,公司名称4, 金额5
-#todata : 编号0,年1,月2,公司名3,发票号4, 金额5, 检查6
+#fromdata : 主体0  日期1（2015-02-28） 单据编号2    公司名称3
+#todata : 编号0  日期1（2015-02-28）  公司名称2    出库日期 3   出库单编号4
 # 先把数据清洗下，
-##  检查那一列记得补上0
 ##  公司名人工核对
 ##  金额的格式化为number
 ##  公司名字去掉逗号
 # 匹配条件：  主体，公司名，年份，月份一样
-# 检查条件：  sum（from的税后金额） =  to借方金额
 
 #  ./tolvxin2015.csv     ./tolvxin2016.csv
 
 
 def main():
-    TO_SHEET_NAME = '绿新-target-2017'
-    MAIN_COMPANY = '绿新'
+    TO_SHEET_NAME = '绿宝-2015-non'
+    MAIN_COMPANY = '绿宝'
+    FROM_SHEET_NAME = '销售出库序时簿'
 
-    FROM_BOOK_PATH = './data3/fromdata.xlsx'
-    TOBOOK_NAME = 'todata.xlsx'
+    FROM_BOOK_PATH = './data_stock/fromdata.xls'
+    TOBOOK_NAME = 'todata.xls'
     
 
-    TO_BOOK_PATH = './data3/' + TOBOOK_NAME
+    TO_BOOK_PATH = './data_stock/' + TOBOOK_NAME
     TO_BOOK_DONE_NAME = TO_SHEET_NAME + '.xls'
-    TO_BOOK_DONE_PATH = './data3/' + TO_BOOK_DONE_NAME
+    TO_BOOK_DONE_PATH = './data_stock/' + TO_BOOK_DONE_NAME
     xlrd.Book.encoding = "utf8" #设置编码
     fromdata = xlrd.open_workbook(FROM_BOOK_PATH)
     #fromsheet = fromdata.sheets()[1] #索引添加
-    fromsheet = fromdata.sheet_by_name(u'2017年1-9月集团销售合并')#通过名称获取
+    fromsheet = fromdata.sheet_by_name(FROM_SHEET_NAME)#通过名称获取
     todata = xlrd.open_workbook(TO_BOOK_PATH)
     tosheet = todata.sheet_by_name(TO_SHEET_NAME)#通过名称获取
     
@@ -48,43 +47,36 @@ def main():
     from_row_num = fromsheet.nrows
     log = [['id','年份','月份','主体','原金额','编号','发票号','金额']]
     print(log)
-    #遍历发票表
-    for i in range(to_row_num):
-        #遍历销售表
-        for j in range(from_row_num):
-            #fromdata : 主体0,年度1,月份2,发票号码3,公司名称4, 金额5
-            #todata : 编号0,年1,月2,公司名3,发票号4, 金额5, 检查6
 
-            if(fromsheet.row_values(j)[0] == MAIN_COMPANY and tosheet.row_values(i)[1]==fromsheet.row_values(j)[1] and tosheet.row_values(i)[2]==fromsheet.row_values(j)[2] and tosheet.row_values(i)[3] == fromsheet.row_values(j)[4]):
+    for i in range(1,to_row_num): #遍历to表
+        to_date = tosheet.row_values(i)[1][0:7]
+        for j in range(1,from_row_num):   #遍历from表
+            #fromdata : 主体0  日期1（2015-02-28） 单据编号2    公司名称3
+            #todata : 编号0  日期1（2015-02-28）  公司名称2    出库日期 3   出库单编号4
+            from_date = fromsheet.row_values(j)[1][0:7]
+            if(fromsheet.row_values(j)[0] == MAIN_COMPANY and to_date == from_date and tosheet.row_values(i)[2] == fromsheet.row_values(j)[3]):
                 # 主体确定,年份确定，判断月份一样，判断公司名字一样，
-                addlog = [i,tosheet.row_values(i)[1],tosheet.row_values(i)[2],tosheet.row_values(i)[3],tosheet.row_values(i)[5],j,str(int(fromsheet.row_values(j)[3])).zfill(8),fromsheet.row_values(j)[5]]
+                addlog = [i,tosheet.row_values(i)[1],tosheet.row_values(i)[2],j,fromsheet.row_values(j)[1],fromsheet.row_values(j)[2]]
                 #log.append(addlog) #把所有的匹配项都记录下来
                 print(addlog)
-                invoice = tosheet.row_values(i)[4] + "/" + str(int(fromsheet.row_values(j)[3])).zfill(8)
-                tosheet.put_cell(i,4,1,invoice,0)   # 粘贴发票
-
-                money = tosheet.row_values(i)[6]+fromsheet.row_values(j)[5]
-                tosheet.put_cell(i,6,2,money,0)   # 粘贴金额
+                stock_sn = tosheet.row_values(i)[4] + "/" + fromsheet.row_values(j)[2]
+                stock_date = tosheet.row_values(i)[3] + "/" + fromsheet.row_values(j)[1]
+                tosheet.put_cell(i,4,1,stock_sn,0)   # 粘贴出库号
+                tosheet.put_cell(i,3,1,stock_date,0)
                 #table.put_cell(row, col, ctype, value, xf)
                 #类型 0 empty,1 string, 2 number, 3 date, 4 boolean, 5 error
                 #xf = 0 # 扩展的格式化
-                tosheet.row_values(i)[6] = tosheet.row_values(i)[6] + fromsheet.row_values(j)[5] # 金额加总检查
                 time.sleep(0.001)
 
 
     for i in range(to_row_num):
-        invoice = tosheet.row_values(i)[4]
-        invoice = RemoveDup(invoice)        # 删除重复项
-        tosheet.put_cell(i,4,1,invoice,0)   # 粘贴发票
         print(tosheet.row_values(i))
-        if (tosheet.row_values(i)[6] == 0):
-            print("没找到发票")
-        if(tosheet.row_values(i)[6] != tosheet.row_values(i)[5]):
-            print("金额不匹配")
+        if(tosheet.row_values(i)[4]==""):
+            print("没有出库单")
         
 
     todata_done = xlwt.Workbook(TO_BOOK_DONE_NAME)
-    tosheet_done = todata_done.add_sheet(u'绿新2015',cell_overwrite_ok=True) #创建sheet
+    tosheet_done = todata_done.add_sheet(TO_SHEET_NAME,cell_overwrite_ok=True) #创建sheet
     for i in range(to_row_num):
         for j in range(to_col_num):
             tosheet_done.write(i,j,tosheet.row_values(i)[j])
